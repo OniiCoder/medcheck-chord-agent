@@ -332,10 +332,43 @@ class McpServerController extends Controller
         };
     }
 
+    private function resolveDiagnosticTest(string $input): ?DiagnosticTest
+    {
+        $code = strtoupper(str_replace('_', '-', trim($input)));
+        if ($code === '') {
+            return null;
+        }
+
+        // Common alias mapping in case LLM uses shorthand codes or names
+        $aliases = [
+            'FLP-001' => 'LIPID-FAST',
+            'LIPID' => 'LIPID-FAST',
+            'FBS' => 'FBS-HBA1C',
+            'HBA1C' => 'FBS-HBA1C',
+            'FBC' => 'FBC-MALARIA',
+            'MALARIA' => 'FBC-MALARIA',
+            'PELVIC' => 'US-PELVIC',
+            'ABDOMEN' => 'US-ABDOMEN',
+            'BRAIN-MRI' => 'MRI-BRAIN',
+            'SPINE-MRI' => 'MRI-LUMBOSACRAL',
+            'ECG' => 'ECHO-ECG',
+            'ECHO' => 'ECHO-ECG',
+        ];
+        $mappedCode = $aliases[$code] ?? $code;
+
+        $test = DiagnosticTest::where('code', $mappedCode)->first();
+        if ($test) {
+            return $test;
+        }
+
+        return DiagnosticTest::where('name', 'like', '%' . trim($input) . '%')->first();
+    }
+
     private function toolCheckClinicSlots(array $args): array
     {
-        $testCode = strtoupper(trim((string) ($args['test_code'] ?? '')));
-        $rawDate = trim((string) ($args['preferred_date'] ?? ''));
+        $rawCode = (string) ($args['test_code'] ?? $args['testCode'] ?? $args['code'] ?? '');
+        $testCode = strtoupper(trim($rawCode));
+        $rawDate = trim((string) ($args['preferred_date'] ?? $args['preferredDate'] ?? ''));
 
         if ($rawDate === '' || strtolower($rawDate) === 'tomorrow') {
             $preferredDate = Carbon::tomorrow('Africa/Lagos')->format('Y-m-d');
@@ -349,7 +382,7 @@ class McpServerController extends Controller
             }
         }
 
-        $test = DiagnosticTest::where('code', $testCode)->first();
+        $test = $this->resolveDiagnosticTest($rawCode);
 
         if (! $test) {
             $availableCodes = DiagnosticTest::pluck('name', 'code')->toArray();
@@ -459,7 +492,7 @@ class McpServerController extends Controller
             ];
         }
 
-        $test = DiagnosticTest::where('code', $testCode)->first();
+        $test = $this->resolveDiagnosticTest($testCode);
         if (! $test) {
             return [
                 'isError' => true,

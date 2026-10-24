@@ -36,7 +36,7 @@ Follow these exact steps in order:
 ### Step 1 — Identify the Test, Check Slots, and State Mandatory Prep Rules
 When a patient asks to book a test or asks what slots are open:
 1. Map their request to the exact `test_code` (`LIPID-FAST`, `FBS-HBA1C`, `FBC-MALARIA`, `US-PELVIC`, `US-ABDOMEN`, `MRI-BRAIN`, `MRI-LUMBOSACRAL`, or `ECHO-ECG`).
-2. Call `check_clinic_slots` with `test_code` and `preferred_date` (in `YYYY-MM-DD` format; if they say "tomorrow", use `2026-10-20`).
+2. Call `check_clinic_slots` with `test_code` and `preferred_date` (in `YYYY-MM-DD` format; if they say "tomorrow" or don't specify a date, omit `preferred_date` or pass `"tomorrow"`).
 3. Present:
    - The exact price in Naira (`₦...`),
    - The **available** time slots (if a requested slot is `FULL` or `RESTRICTED_MORNING_ONLY_TEST`, explain why and suggest the open slots returned by the tool),

@@ -2,18 +2,59 @@
 
 **Candidate Role:** Forward-Deployed Engineer
 
-Below are the specific technical issues, API contract edge cases, UI gaps, and deployment hurdles encountered while building and deploying the MedCheck Diagnostics agent on Chord, grouped into three categories:
-1. **Group A — Chord REST API & `php artisan chord:deploy` (`ChordDeployCommand`) Field Notes**
-2. **Group B — Chord Web UI, Onboarding & Brief Field Notes**
+Below are the specific technical issues, UI gaps, API contract edge cases, and deployment hurdles encountered while building and deploying the MedCheck Diagnostics agent on Chord, grouped into three categories:
+1. **Group A — Chord Web UI, Onboarding & Exercise Brief Field Notes**
+2. **Group B — Chord REST API & `php artisan chord:deploy` (`ChordDeployCommand`) Field Notes**
 3. **Group C — Paystack Test Mode & Laravel Forge Production Deployment Field Notes**
 
 ---
 
-## Group A: Chord REST API & `ChordDeployCommand` (`php artisan chord:deploy`)
+## Group A: Chord Web UI, Onboarding & Exercise Brief
+
+### Field Note 1: Account Signup 6-Digit Verification OTP Routed to Spam
+
+* **What happened:**
+  - During Chord account signup (`chordhq.xyz/login`), the 6-digit email verification code did not arrive in the primary inbox and was routed directly to the Spam folder.
+* **How I worked out the cause:**
+  - Checked the Spam folder after waiting in the primary inbox and found the verification email flagged by the mail provider's spam filter (typical when a transactional sender domain/IP lacks warmed SPF, DKIM, and DMARC alignment).
+* **How I fixed it / worked around it:**
+  - Retrieved the 6-digit code from Spam and marked the sender as "Not Spam" so subsequent Chord notifications land in the inbox.
+* **What I'd change in Chord next week:**
+  - Audit SPF/DKIM/DMARC records and transactional IP reputation for the OTP sender domain, and add a short hint on the OTP verification screen (*"Didn't get the code? Check your Spam/Promotions folder"*).
+
+---
+
+### Field Note 2: No Connected Tool Count or Status Indicator Under `Connections > Channels & Tools` on the Admin Page
+
+* **What happened:**
+  - After registering and connecting our custom MCP tool server, the Admin page (`Connections > Channels & Tools`) showed no visual badge, count, or status indicator confirming that a custom tool was configured and active.
+* **How I worked out the cause:**
+  - Clicked back into the MCP / Tools configuration view and tested the teammate in the simulator to verify the tool was bound, confirming that the parent `Connections > Channels & Tools` list item doesn't render summary state for connected custom MCP servers.
+* **How I fixed it / worked around it:**
+  - Verified active tool registration by opening the tool configuration sub-view directly and monitoring inbound `tools/list` and `tools/call` requests on our Laravel Forge Operations Console.
+* **What I'd change in Chord next week:**
+  - Display a status pill or counter on the `Connections > Channels & Tools` row (e.g., `1 MCP Server Connected · 4 Tools Active` with a green health dot) so builders can see at a glance from the Admin page that their custom tools are wired up.
+
+---
+
+### Field Note 3: Broken Context Link in Exercise Brief & SSR `403` on `tsglabs.com`
+
+* **What happened (including error messages):**
+  - The exercise brief's context link (`https://tsglabs.com/blog/announcing-tsg-labs`) returns `HTTP 404 Not Found`, and `https://tsglabs.com/` contains a Nuxt SSR error in `__NUXT_DATA__`: `{"statusCode": 403, "message": "[GET] \"/api/blog/posts\": 403 Forbidden"}`.
+* **How I worked out the cause:**
+  - Inspected the serialized `__NUXT_DATA__` payload on `tsglabs.com`, showing the server-side fetch to `/api/blog/posts` failing with `403 Forbidden`.
+* **How I fixed it / worked around it:**
+  - Used `https://api.chordhq.xyz/docs` and the `paystack-index` interactive terminal on `tsglabs.com` for platform context.
+* **What I'd change next week:**
+  - Restore the public read token/permissions backing `GET /api/blog/posts` on `tsglabs.com`.
+
+---
+
+## Group B: Chord REST API & `ChordDeployCommand` (`php artisan chord:deploy`)
 
 These four issues were uncovered while building and running [`ChordDeployCommand.php`](app/Console/Commands/ChordDeployCommand.php) to automate teammate discovery, skill draft creation/publishing, MCP server registration, teammate tool scoping, and `/health` + `/tools` probing via `https://api.chordhq.xyz`.
 
-### Field Note 1: MCP `streamable_http` Registration Succeeds (`201 Created`) While Subsequent `/tools` & `/health` Probes Fail Due to CSRF, Static-Auth State, and Notification Status Codes
+### Field Note 4: MCP `streamable_http` Registration Succeeds (`201 Created`) While Subsequent `/tools` & `/health` Probes Fail Due to CSRF, Static-Auth State, and Notification Status Codes
 
 * **What happened (including error messages):**
   1. Registering our Laravel MCP endpoint (`/mcp`) via `POST /v1/workspaces/{ws}/mcp-servers` returned `201 Created` (`{"id": "mcp-...", "enabled": false, "transport": "streamable_http"}`).
@@ -32,7 +73,7 @@ These four issues were uncovered while building and running [`ChordDeployCommand
 
 ---
 
-### Field Note 2: Dangerous Default in Teammate MCP Scoping (`mcp_server_ids: []` Grants Access to *All* Workspace Servers)
+### Field Note 5: Dangerous Default in Teammate MCP Scoping (`mcp_server_ids: []` Grants Access to *All* Workspace Servers)
 
 * **What happened:**
   - When updating a teammate (`PUT /v1/teammates/{id}`) in `ChordDeployCommand`, sending `{"set_mcp_server_ids": []}` is a no-op, and an empty `mcp_server_ids` array on a teammate is interpreted by Chord's runtime as **"allow ALL enabled MCP servers in the workspace."**
@@ -45,7 +86,7 @@ These four issues were uncovered while building and running [`ChordDeployCommand
 
 ---
 
-### Field Note 3: Skill Draft vs. Published State & Dual Version Counters (`skill.version` vs. `published_version`)
+### Field Note 6: Skill Draft vs. Published State & Dual Version Counters (`skill.version` vs. `published_version`)
 
 * **What happened (including error messages):**
   - Creating a skill via `POST /v1/teammates/{identifier}/skills` returns `201 Created`, or clicking **Save draft** in the UI saves edits, but the teammate ignores the new `SKILL.md` in chat until explicitly published.
@@ -60,7 +101,7 @@ These four issues were uncovered while building and running [`ChordDeployCommand
 
 ---
 
-### Field Note 4: Live `api.chordhq.xyz` Gateway Probing — Mismatched `x-request-id` UUIDs, `camelCase` vs. `snake_case` Validation Trap, and `500` on Unsupported HTTP Verbs
+### Field Note 7: Live `api.chordhq.xyz` Gateway Probing — Mismatched `x-request-id` UUIDs, `camelCase` vs. `snake_case` Validation Trap, and `500` on Unsupported HTTP Verbs
 
 * **What happened (including error messages):**
   1. **Mismatched Request IDs on `403 FORBIDDEN`:** Calling `GET https://api.chordhq.xyz/v1/teammates` without an inbound `X-Request-ID` header returned:
@@ -80,47 +121,6 @@ These four issues were uncovered while building and running [`ChordDeployCommand
   1. Generate the request UUID once in the outermost filter when no inbound `X-Request-ID` header is present and reuse it in `@ControllerAdvice`.
   2. Pass Bean Validation property paths through Jackson's `PropertyNamingStrategies.SNAKE_CASE` before building `error.details`.
   3. Map `HttpRequestMethodNotSupportedException` to `405 METHOD_NOT_ALLOWED`.
-
----
-
-## Group B: Chord Web UI, Onboarding & Exercise Brief
-
-### Field Note 5: Account Signup 6-Digit Verification OTP Routed to Spam
-
-* **What happened:**
-  - During Chord account signup (`chordhq.xyz/login`), the 6-digit email verification code did not arrive in the primary inbox and was routed directly to the Spam folder.
-* **How I worked out the cause:**
-  - Checked the Spam folder after waiting in the primary inbox and found the verification email flagged by the mail provider's spam filter (typical when a transactional sender domain/IP lacks warmed SPF, DKIM, and DMARC alignment).
-* **How I fixed it / worked around it:**
-  - Retrieved the 6-digit code from Spam and marked the sender as "Not Spam" so subsequent Chord notifications land in the inbox.
-* **What I'd change in Chord next week:**
-  - Audit SPF/DKIM/DMARC records and transactional IP reputation for the OTP sender domain, and add a short hint on the OTP verification screen (*"Didn't get the code? Check your Spam/Promotions folder"*).
-
----
-
-### Field Note 6: No Connected Tool Count or Status Indicator Under `Connections > Channels & Tools` on the Admin Page
-
-* **What happened:**
-  - After registering and connecting our custom MCP tool server, the Admin page (`Connections > Channels & Tools`) showed no visual badge, count, or status indicator confirming that a custom tool was configured and active.
-* **How I worked out the cause:**
-  - Clicked back into the MCP / Tools configuration view and tested the teammate in the simulator to verify the tool was bound, confirming that the parent `Connections > Channels & Tools` list item doesn't render summary state for connected custom MCP servers.
-* **How I fixed it / worked around it:**
-  - Verified active tool registration by opening the tool configuration sub-view directly and monitoring inbound `tools/list` and `tools/call` requests on our Laravel Forge Operations Console.
-* **What I'd change in Chord next week:**
-  - Display a status pill or counter on the `Connections > Channels & Tools` row (e.g., `1 MCP Server Connected · 4 Tools Active` with a green health dot) so builders can see at a glance from the Admin page that their custom tools are wired up.
-
----
-
-### Field Note 7: Broken Context Link in Exercise Brief & SSR `403` on `tsglabs.com`
-
-* **What happened (including error messages):**
-  - The exercise brief's context link (`https://tsglabs.com/blog/announcing-tsg-labs`) returns `HTTP 404 Not Found`, and `https://tsglabs.com/` contains a Nuxt SSR error in `__NUXT_DATA__`: `{"statusCode": 403, "message": "[GET] \"/api/blog/posts\": 403 Forbidden"}`.
-* **How I worked out the cause:**
-  - Inspected the serialized `__NUXT_DATA__` payload on `tsglabs.com`, showing the server-side fetch to `/api/blog/posts` failing with `403 Forbidden`.
-* **How I fixed it / worked around it:**
-  - Used `https://api.chordhq.xyz/docs` and the `paystack-index` interactive terminal on `tsglabs.com` for platform context.
-* **What I'd change next week:**
-  - Restore the public read token/permissions backing `GET /api/blog/posts` on `tsglabs.com`.
 
 ---
 

@@ -218,5 +218,23 @@ class McpServerTest extends TestCase
         $this->assertTrue($paidData['payment_verified']);
         $this->assertEquals('confirmed', $paidData['status']);
         $this->assertStringStartsWith('MCK-PASS-', $paidData['lab_pass_code']);
+
+        // 5. Attempting to cancel an already CONFIRMED (paid) booking logs a Supervisor Escalation Ticket (ESC-...)
+        $cancelPaidResp = $this->postJson('/mcp', [
+            'jsonrpc' => '2.0',
+            'id' => 24,
+            'method' => 'tools/call',
+            'params' => [
+                'name' => 'lookup_or_cancel_booking',
+                'arguments' => [
+                    'query' => $bookingRef,
+                    'action' => 'cancel_hold',
+                ],
+            ],
+        ]);
+
+        $cancelPaidData = json_decode($cancelPaidResp->json('result.content.0.text'), true);
+        $this->assertEquals('CANNOT_CANCEL_PAID_BOOKING_AUTOMATICALLY', $cancelPaidData['error_code']);
+        $this->assertStringStartsWith('ESC-', $cancelPaidData['escalation_ticket_id']);
     }
 }

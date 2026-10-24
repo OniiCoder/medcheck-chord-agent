@@ -25,6 +25,10 @@ class DashboardController extends Controller
             ->get();
 
         $auditLogs = McpAuditLog::latest()->take(25)->get();
+        $escalations = McpAuditLog::where('rpc_method', 'supervisor_escalation')
+            ->latest()
+            ->take(10)
+            ->get();
         $tests = DiagnosticTest::orderBy('category')->get();
         $tomorrowDate = Carbon::tomorrow('Africa/Lagos')->format('Y-m-d');
         $slotsTomorrow = ClinicSlot::where('slot_date', $tomorrowDate)
@@ -35,6 +39,7 @@ class DashboardController extends Controller
         return view('dashboard', [
             'appointments' => $appointments,
             'auditLogs' => $auditLogs,
+            'escalations' => $escalations,
             'tests' => $tests,
             'slotsTomorrow' => $slotsTomorrow,
             'tomorrowDate' => $tomorrowDate,

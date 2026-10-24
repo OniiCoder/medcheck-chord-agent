@@ -34,6 +34,56 @@
             </div>
         @endif
 
+        <!-- Supervisor Escalation & Human Handoff Queue -->
+        <section class="bg-slate-900 border border-rose-500/30 rounded-xl overflow-hidden shadow-lg">
+            <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-rose-950/20">
+                <div class="flex items-center gap-3">
+                    <span class="inline-flex h-2.5 w-2.5 rounded-full bg-rose-400"></span>
+                    <div>
+                        <h2 class="text-base font-semibold text-white">Supervisor Escalation &amp; Human Handoff Queue</h2>
+                        <p class="text-xs text-slate-400">Logged automatically when Ada escalates emergencies, HMO pre-authorizations, contrast MRI reviews, or paid booking refunds (<code class="text-rose-300">ESC-...</code>)</p>
+                    </div>
+                </div>
+                <span class="px-2.5 py-0.5 rounded-full text-xs font-mono bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                    {{ $escalations->count() }} escalated
+                </span>
+            </div>
+            @if ($escalations->isNotEmpty())
+                <div class="divide-y divide-slate-800/70">
+                    @foreach ($escalations as $esc)
+                        @php $data = $esc->response_payload ?? []; @endphp
+                        <div class="px-6 py-3.5 flex flex-wrap items-center justify-between gap-4 text-xs">
+                            <div class="space-y-1">
+                                <div class="flex items-center gap-2">
+                                    <span class="px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40 font-mono font-semibold">
+                                        {{ $data['escalation_ticket_id'] ?? 'ESC-TICKET' }}
+                                    </span>
+                                    <span class="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono uppercase">
+                                        {{ $data['category'] ?? 'general' }} ({{ $data['priority'] ?? 'HIGH' }})
+                                    </span>
+                                    <span class="text-slate-300 font-medium">
+                                        Routed to: <strong class="text-white">{{ $data['routed_to_desk'] ?? 'Clinic Supervisor' }}</strong>
+                                    </span>
+                                </div>
+                                <p class="text-slate-300">
+                                    <span class="text-slate-400">Patient / Ref:</span> <code class="text-slate-200">{{ $data['query_or_reference'] ?? 'N/A' }}</code>
+                                    &mdash; {{ $data['reason'] ?? '' }}
+                                </p>
+                            </div>
+                            <div class="text-right font-mono text-slate-400">
+                                <div>SLA: {{ $data['target_response_sla'] ?? '15 mins' }}</div>
+                                <div>{{ $esc->created_at->format('Y-m-d H:i:s') }}</div>
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+            @else
+                <div class="px-6 py-4 text-xs text-slate-400">
+                    No active supervisor escalations yet. Ask Ada on WhatsApp to cancel paid booking <code class="text-slate-200">MCK-20261019-1001</code>, book with an HMO, or report an emergency symptom to trigger a live <code class="text-rose-300">ESC-...</code> handoff ticket.
+                </div>
+            @endif
+        </section>
+
         <!-- Live Appointments & Paystack Status -->
         <section class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg">
             <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between">

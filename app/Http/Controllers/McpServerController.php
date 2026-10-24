@@ -295,18 +295,27 @@ class McpServerController extends Controller
             ],
             [
                 'name' => 'lookup_or_cancel_booking',
-                'description' => 'Look up an existing appointment by booking reference, Paystack reference, or patient phone number, or cancel an unpaid slot hold so the slot returns to clinic inventory.',
+                'description' => 'Look up an existing appointment by booking reference, Paystack reference, or patient phone number; cancel an unpaid slot hold; or escalate a case (emergency red flag, HMO pre-authorization, contrast MRI clearance, or paid booking refund) to a human clinic supervisor with a tracked ESC-... ticket.',
                 'inputSchema' => [
                     'type' => 'object',
                     'properties' => [
                         'query' => [
                             'type' => 'string',
-                            'description' => 'Booking reference (MCK-...), Paystack reference (PSK-...), or patient phone number.',
+                            'description' => 'Booking reference (MCK-...), Paystack reference (PSK-...), patient phone number, or patient name/topic being escalated.',
                         ],
                         'action' => [
                             'type' => 'string',
-                            'enum' => ['lookup', 'cancel_hold'],
-                            'description' => 'Use "lookup" to inspect current status, or "cancel_hold" to cancel an unpaid booking and release the slot.',
+                            'enum' => ['lookup', 'cancel_hold', 'escalate'],
+                            'description' => 'Use "lookup" to inspect current status, "cancel_hold" to cancel an unpaid booking, or "escalate" to log a human supervisor handoff ticket.',
+                        ],
+                        'category' => [
+                            'type' => 'string',
+                            'enum' => ['emergency', 'hmo_insurance', 'paid_refund', 'contrast_radiology', 'billing_dispute', 'general'],
+                            'description' => 'Escalation category when action="escalate".',
+                        ],
+                        'reason' => [
+                            'type' => 'string',
+                            'description' => 'Detailed clinical, HMO, or billing reason when action="escalate".',
                         ],
                     ],
                     'required' => ['query'],
@@ -327,6 +336,7 @@ class McpServerController extends Controller
             'book_and_initialize_payment' => $this->toolBookAndInitializePayment($args),
             'verify_payment_and_issue_pass' => $this->toolVerifyPaymentAndIssuePass($args),
             'lookup_or_cancel_booking' => $this->toolLookupOrCancelBooking($args),
+            'escalate_to_clinic_desk' => $this->toolLookupOrCancelBooking(array_merge($args, ['action' => 'escalate'])),
             default => [
                 'isError' => true,
                 'data' => [
@@ -788,7 +798,7 @@ class McpServerController extends Controller
 
     private function toolLookupOrCancelBooking(array $args): array
     {
-        $query = trim((string) ($args['query'] ?? ''));
+        $query = trim((string) ($args['query'] ?? $args['reference'] ?? $args['patient_phone'] ?? ''));
         $action = $args['action'] ?? 'lookup';
 
         $appointment = Appointment::with(['diagnosticTest', 'clinicSlot'])
@@ -797,6 +807,12 @@ class McpServerController extends Controller
             ->orWhere('patient_phone', $query)
             ->latest()
             ->first();
+
+        if ($action === 'escalate') {
+            $category = strtolower(trim((string) ($args['category'] ?? 'general')));
+            $reason = trim((string) ($args['reason'] ?? 'Patient requested human supervisor assistance.'));
+            return $this->createEscalationTicket($query, $category, $reason, $appointment);
+        }
 
         if (! $appointment) {
             return [
@@ -811,12 +827,21 @@ class McpServerController extends Controller
 
         if ($action === 'cancel_hold') {
             if ($appointment->status === 'CONFIRMED') {
+                $escalation = $this->createEscalationTicket(
+                    $appointment->booking_reference,
+                    'paid_refund',
+                    'Customer requested cancellation/refund of already paid booking ' . $appointment->booking_reference,
+                    $appointment
+                );
+
                 return [
                     'isError' => true,
                     'data' => [
                         'status' => 'error',
                         'error_code' => 'CANNOT_CANCEL_PAID_BOOKING_AUTOMATICALLY',
-                        'message' => 'This appointment is already CONFIRMED and paid. Paid cancellations/refunds require front-desk supervisor approval.',
+                        'escalation_ticket_id' => $escalation['data']['escalation_ticket_id'],
+                        'routed_to_desk' => $escalation['data']['routed_to_desk'],
+                        'message' => 'This appointment is already CONFIRMED and paid. Paid cancellations/refunds require front-desk supervisor approval. Escalation ticket ' . $escalation['data']['escalation_ticket_id'] . ' has been logged for the Billing Supervisor.',
                     ],
                 ];
             }
@@ -858,6 +883,84 @@ class McpServerController extends Controller
                 'amount_formatted' => '₦' . number_format($appointment->amount_ngn),
                 'checkout_url' => $appointment->paystack_checkout_url,
             ],
+        ];
+    }
+
+    private function createEscalationTicket(
+        string $query,
+        string $category,
+        string $reason,
+        ?Appointment $appointment = null
+    ): array {
+        $ticketId = 'ESC-' . Carbon::now('Africa/Lagos')->format('Ymd') . '-' . random_int(1000, 9999);
+
+        $routingMap = [
+            'emergency' => [
+                'desk' => 'Emergency Triage & Duty Medical Officer (112 / Evercare ER)',
+                'sla' => 'IMMEDIATE (0 mins)',
+                'priority' => 'CRITICAL',
+            ],
+            'hmo_insurance' => [
+                'desk' => 'Ground-Floor HMO Pre-Authorization Desk',
+                'sla' => '15 mins',
+                'priority' => 'HIGH',
+            ],
+            'paid_refund' => [
+                'desk' => 'Front-Desk Billing & Refunds Supervisor',
+                'sla' => '30 mins',
+                'priority' => 'HIGH',
+            ],
+            'contrast_radiology' => [
+                'desk' => 'Resident Consultant Radiologist Desk',
+                'sla' => '20 mins',
+                'priority' => 'HIGH',
+            ],
+            'billing_dispute' => [
+                'desk' => 'Paystack Reconciliation & Billing Desk',
+                'sla' => '15 mins',
+                'priority' => 'HIGH',
+            ],
+        ];
+
+        $route = $routingMap[$category] ?? [
+            'desk' => 'Senior Clinic Patient Coordinator',
+            'sla' => '15 mins',
+            'priority' => 'NORMAL',
+        ];
+
+        if ($appointment) {
+            $appointment->notes = trim(($appointment->notes ? $appointment->notes . ' | ' : '') . "[{$ticketId}] Escalated ({$category}): {$reason}");
+            $appointment->save();
+        }
+
+        $ticketData = [
+            'status' => 'escalated_to_human',
+            'escalation_ticket_id' => $ticketId,
+            'priority' => $route['priority'],
+            'category' => $category,
+            'routed_to_desk' => $route['desk'],
+            'target_response_sla' => $route['sla'],
+            'query_or_reference' => $query,
+            'booking_reference' => $appointment?->booking_reference,
+            'patient_name' => $appointment?->patient_name,
+            'patient_phone' => $appointment?->patient_phone,
+            'reason' => $reason,
+            'agent_instruction' => "Share escalation_ticket_id ({$ticketId}) with the patient and let them know their case has been routed to {$route['desk']} (target response: {$route['sla']}).",
+        ];
+
+        $this->logRpcCall(
+            'supervisor_escalation',
+            'escalate_to_clinic_desk',
+            ['query' => $query, 'category' => $category, 'reason' => $reason],
+            $ticketData,
+            200,
+            microtime(true),
+            request()?->ip()
+        );
+
+        return [
+            'isError' => false,
+            'data' => $ticketData,
         ];
     }
 

@@ -8,7 +8,6 @@ Built for the **TSG Labs Build Exercise** (**Role: Forward-Deployed Engineering*
 
 ## Key Submission Documents
 
-- **[`SUBMISSION.md`](SUBMISSION.md)** — Role preference, 4-sentence problem statement, and 3-minute screen recording walkthrough.
 - **[`DEPLOYMENT_FIELD_NOTES.md`](DEPLOYMENT_FIELD_NOTES.md)** — Detailed engineering field notes on MCP `streamable_http` probes, teammate scoping defaults, Skill CAS versioning, and `tsglabs.com` SSR findings.
 - **[`GO_LIVE_NOTE.md`](GO_LIVE_NOTE.md)** — Half-page non-technical go-live handover note for the clinic owner.
 - **[`chord-skill/`](chord-skill/)** & **[`chord-skill.zip`](chord-skill.zip)** — The Chord Skill package (`SKILL.md` + `references/test_catalog_and_prep.md` + `references/clinic_policies_and_hmo.md`).
@@ -23,7 +22,7 @@ Built for the **TSG Labs Build Exercise** (**Role: Forward-Deployed Engineering*
 2. **Custom MCP Server (`POST /mcp` in `app/Http/Controllers/McpServerController.php`)**:
    - Implements the **MCP Streamable HTTP** (`2024-11-05` / `2025-03-26`) JSON-RPC 2.0 specification.
    - Exposes 4 tools to Chord:
-     - `check_clinic_slots` — Queries SQLite slot inventory and enforces morning-only fasting cutoffs.
+     - `check_clinic_slots` — Queries MySQL slot inventory and enforces morning-only fasting cutoffs.
      - `book_and_initialize_payment` — Verifies prep acknowledgement, locks the slot for 30 minutes, and initializes a **Paystack Test Mode** transaction in **kobo** (`POST https://api.paystack.co/transaction/initialize`).
      - `verify_payment_and_issue_pass` — Calls Paystack's Verify API (`GET https://api.paystack.co/transaction/verify/{ref}`), validates `status === "success"` and kobo amount, and issues a `MCK-PASS-XXXX` code (or returns structured failure details and a retry link when a payment is `abandoned` or `failed`).
      - `lookup_or_cancel_booking` — Inspects booking status or cancels an unpaid hold and restores slot capacity.
@@ -61,24 +60,18 @@ ngrok http 8000
 Add your keys to `.env`:
 ```env
 PAYSTACK_SECRET_KEY=sk_test_your_paystack_test_key
-MCP_BEARER_TOKEN=medcheck-mcp-secret-token-2026
+MCP_BEARER_TOKEN=medcheck-mcp-secret-token-2026 (optional)
 
 CHORD_BASE_URL=https://api.chordhq.xyz
 CHORD_API_KEY=your_chord_api_key
-CHORD_WORKSPACE_ID=ws-...
-CHORD_TEAMMATE_ID=tm-...
 ```
 
-Then run the single-command provisioning script to upload & publish the Skill, register the MCP server, scope the teammate, and run Chord's `/health` and `/tools` discovery probes:
-```bash
-php artisan chord:deploy --mcp-url=https://<your-ngrok-domain>.ngrok-free.app/mcp
-```
-*(Alternatively, you can upload `chord-skill.zip` directly in the Chord Web UI under **Teammates → Skills** and register `https://<your-ngrok-domain>.ngrok-free.app/mcp` under **Teammate Settings → Tools → Add tool**.)*
+You can upload `chord-skill.zip` directly in the Chord Web UI under **Teammates → Skills** and register `https://<your-ngrok-domain>.ngrok-free.app/mcp` under **Admin → Channels & Tools → Tools → Add server (undeer Custom tools (MCP))**.)*
 
 ---
 
 ## How AI Tools Were Used
 We used **Google Antigravity (Gemini)** as a pair-programming assistant to:
 1. Review the Chord REST API documentation (`api.chordhq.xyz/docs`) and map out the exact contract for file-based Skills (`/v1/teammates/{id}/skills`) and Streamable HTTP MCP servers (`/v1/workspaces/{id}/mcp-servers`).
-2. Scaffold the Laravel 13 MCP JSON-RPC controller, Paystack kobo initialization/verification service, and SQLite schema/seeders for MedCheck Diagnostics Lekki.
+2. Scaffold the Laravel 13 MCP JSON-RPC controller, Paystack kobo initialization/verification service, and MySQL schema/seeders for MedCheck Diagnostics Lekki.
 3. Write automated PHPUnit feature tests (`tests/Feature/McpServerTest.php`) covering happy paths and edge cases (full slots, morning-only fasting cutoffs, unacknowledged prep rules, and declined/abandoned Paystack payments).

@@ -17,6 +17,6 @@
 
 ### What Must Be True Before Going Live for Real Patients
 1. **Live Paystack Keys & Webhook Backup:** Replace `PAYSTACK_SECRET_KEY=sk_test_...` with your live `sk_live_...` key and enable the Paystack `charge.success` webhook so payments confirm automatically even if a patient closes WhatsApp after paying.
-2. **Production WhatsApp Business Number:** Connect your verified clinic WhatsApp Business number (`+234...`) in **Chord → Teammate Settings → Channels** (replacing the test simulator).
+2. **Production WhatsApp Business Number:** Connect your verified clinic WhatsApp Business number (`+234...`) in **Chord** (replacing the test simulator).
 3. **Automated Hold Expiry Cron:** Enable the scheduled job that releases unpaid 30-minute slot holds back to clinic inventory so abandoned checkouts never block morning capacity.
-4. **Escalation Alerts & Human Takeover:** Configure **Chord Escalation Notifications** to email/ping your Front-Desk Supervisor (`frontdesk@medchecklekki.com`) whenever Ada escalates an HMO inquiry, a repeated payment failure, or an emergency red flag.
+4. **Escalation Alerts & Human Takeover:** Configure **Chord Escalation Notifications** to email/ping your Front-Desk Supervisor whenever Ada escalates an HMO inquiry, a repeated payment failure, or an emergency red flag.

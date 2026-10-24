@@ -183,7 +183,7 @@ class McpServerTest extends TestCase
         $this->assertEquals('abandoned', $unpaidData['paystack_payment_status']);
         $this->assertArrayNotHasKey('lab_pass_code', $unpaidData);
 
-        // 3. Verify pre-seeded FAILED payment (MCK-20261019-1002) -> returns payment_verified: false (failed)
+        // 3. Verify pre-seeded FAILED payment (MCK-20261019-1002) -> returns payment_verified: false (failed) and generates a brand-new link
         $failedVerify = $this->postJson('/mcp', [
             'jsonrpc' => '2.0',
             'id' => 22,
@@ -197,6 +197,9 @@ class McpServerTest extends TestCase
         $failedData = json_decode($failedVerify->json('result.content.0.text'), true);
         $this->assertFalse($failedData['payment_verified']);
         $this->assertEquals('failed', $failedData['paystack_payment_status']);
+        $this->assertEquals('PSK-MCK-1002-DECLINED', $failedData['previous_paystack_reference']);
+        $this->assertNotEquals('PSK-MCK-1002-DECLINED', $failedData['new_paystack_reference']);
+        $this->assertNotEquals('https://checkout.paystack.com/test_retry_1002', $failedData['new_checkout_url']);
 
         // 4. Simulate Paystack payment success on Tunde's booking and verify again -> issues MCK-PASS-XXXX
         Appointment::where('booking_reference', $bookingRef)->update(['paystack_payment_status' => 'success']);

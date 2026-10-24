@@ -731,13 +731,40 @@ class McpServerController extends Controller
             ];
         }
 
-        // Handle failed or abandoned payment explicitly
+        // Handle failed or abandoned payment explicitly by generating a fresh Paystack payment link
         $txStatus = $verification['payment_status'] ?? 'abandoned';
+        $previousPaystackRef = $appointment->paystack_reference;
+        $previousCheckoutUrl = $appointment->paystack_checkout_url;
+
+        $newPaystackRef = 'PSK-' . $appointment->booking_reference . '-' . Str::upper(Str::random(4));
+        $reinit = $this->paystack->initializeTransaction(
+            email: $appointment->patient_email,
+            amountKobo: (int) $appointment->amount_kobo,
+            reference: $newPaystackRef,
+            metadata: [
+                'booking_reference' => $appointment->booking_reference,
+                'previous_paystack_reference' => $previousPaystackRef,
+                'patient_name' => $appointment->patient_name,
+                'patient_phone' => $appointment->patient_phone,
+                'test_code' => $appointment->diagnosticTest?->code,
+                'slot_code' => $appointment->clinicSlot?->slot_code,
+                'retry_attempt' => true,
+            ]
+        );
+
+        if ($reinit['ok'] ?? false) {
+            $appointment->paystack_reference = $reinit['reference'];
+            $appointment->paystack_checkout_url = $reinit['authorization_url'];
+            $appointment->paystack_access_code = $reinit['access_code'];
+        }
+
         if ($txStatus === 'failed') {
             $appointment->status = 'PAYMENT_FAILED';
-            $appointment->paystack_payment_status = 'failed';
-            $appointment->save();
         }
+        // Reset payment status to unpaid for the newly generated checkout link
+        $appointment->paystack_payment_status = 'unpaid';
+        $appointment->hold_expires_at = Carbon::now()->addMinutes(30);
+        $appointment->save();
 
         return [
             'isError' => false,
@@ -745,12 +772,16 @@ class McpServerController extends Controller
                 'status' => 'payment_not_confirmed',
                 'payment_verified' => false,
                 'booking_reference' => $appointment->booking_reference,
+                'previous_paystack_reference' => $previousPaystackRef,
+                'previous_checkout_url' => $previousCheckoutUrl,
                 'paystack_reference' => $appointment->paystack_reference,
+                'new_paystack_reference' => $appointment->paystack_reference,
                 'paystack_payment_status' => $txStatus,
                 'gateway_response' => $verification['gateway_response'] ?? 'Payment has not been completed yet.',
+                'new_checkout_url' => $appointment->paystack_checkout_url,
                 'retry_checkout_url' => $appointment->paystack_checkout_url,
                 'slot_still_held_until' => optional($appointment->hold_expires_at)->toIso8601String(),
-                'agent_instruction' => 'Do NOT issue a Lab Pass code. Inform the patient politely that Paystack reports the payment as "' . $txStatus . '" (' . ($verification['gateway_response'] ?? '') . '). Share the retry_checkout_url so they can complete or retry payment while their slot hold is still active.',
+                'agent_instruction' => 'Do NOT issue a Lab Pass code. Inform the patient politely that Paystack reported their previous payment attempt (' . $previousPaystackRef . ') as "' . $txStatus . '" (' . ($verification['gateway_response'] ?? '') . '). Tell them you have generated a brand-new Paystack payment link (' . $appointment->paystack_checkout_url . ') with new reference ' . $appointment->paystack_reference . ' so they can pay with that fresh link while their slot hold is active.',
             ],
         ];
     }

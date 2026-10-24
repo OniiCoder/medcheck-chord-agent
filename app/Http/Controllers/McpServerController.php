@@ -317,6 +317,11 @@ class McpServerController extends Controller
 
     private function executeTool(string $toolName, array $args): array
     {
+        // Auto-seed catalog, slots & demo bookings if deployed to a fresh Forge database where db:seed wasn't run
+        if (DiagnosticTest::count() === 0) {
+            app(\Database\Seeders\DatabaseSeeder::class)->run();
+        }
+
         return match ($toolName) {
             'check_clinic_slots' => $this->toolCheckClinicSlots($args),
             'book_and_initialize_payment' => $this->toolBookAndInitializePayment($args),
@@ -334,6 +339,11 @@ class McpServerController extends Controller
 
     private function resolveDiagnosticTest(string $input): ?DiagnosticTest
     {
+        // Auto-seed catalog & slots if deployed to a fresh server (e.g. Laravel Forge) where db:seed was not run
+        if (DiagnosticTest::count() === 0) {
+            app(\Database\Seeders\DatabaseSeeder::class)->run();
+        }
+
         $code = strtoupper(str_replace('_', '-', trim($input)));
         if ($code === '') {
             return null;

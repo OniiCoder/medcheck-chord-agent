@@ -15,6 +15,10 @@ class DashboardController extends Controller
 {
     public function index(): View
     {
+        if (DiagnosticTest::count() === 0) {
+            app(\Database\Seeders\DatabaseSeeder::class)->run();
+        }
+
         $appointments = Appointment::with(['diagnosticTest', 'clinicSlot'])
             ->latest()
             ->take(20)

@@ -103,7 +103,7 @@ class DatabaseSeeder extends Seeder
             );
         }
 
-        $baseDate = Carbon::parse('2026-10-19');
+        $baseDate = Carbon::today('Africa/Lagos');
         $slotTemplates = [
             // Pathology (Phlebotomy Bay)
             ['modality' => 'pathology', 'start' => '07:30', 'end' => '08:00', 'capacity' => 3],

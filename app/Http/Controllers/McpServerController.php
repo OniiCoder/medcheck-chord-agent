@@ -335,10 +335,18 @@ class McpServerController extends Controller
     private function toolCheckClinicSlots(array $args): array
     {
         $testCode = strtoupper(trim((string) ($args['test_code'] ?? '')));
-        $preferredDate = trim((string) ($args['preferred_date'] ?? '2026-10-20'));
+        $rawDate = trim((string) ($args['preferred_date'] ?? ''));
 
-        if (empty($preferredDate)) {
-            $preferredDate = '2026-10-20';
+        if ($rawDate === '' || strtolower($rawDate) === 'tomorrow') {
+            $preferredDate = Carbon::tomorrow('Africa/Lagos')->format('Y-m-d');
+        } elseif (strtolower($rawDate) === 'today') {
+            $preferredDate = Carbon::today('Africa/Lagos')->format('Y-m-d');
+        } else {
+            try {
+                $preferredDate = Carbon::parse($rawDate, 'Africa/Lagos')->format('Y-m-d');
+            } catch (\Throwable) {
+                $preferredDate = Carbon::tomorrow('Africa/Lagos')->format('Y-m-d');
+            }
         }
 
         $test = DiagnosticTest::where('code', $testCode)->first();
@@ -789,14 +797,23 @@ class McpServerController extends Controller
 
         $compactDate = str_replace('-', '', $parsed);
         $templates = [
-            ['modality' => 'pathology', 'start' => '07:30', 'end' => '08:00', 'capacity' => 3],
-            ['modality' => 'pathology', 'start' => '09:30', 'end' => '10:00', 'capacity' => 3],
-            ['modality' => 'pathology', 'start' => '14:00', 'end' => '14:30', 'capacity' => 3],
-            ['modality' => 'ultrasound', 'start' => '09:00', 'end' => '09:45', 'capacity' => 2],
-            ['modality' => 'ultrasound', 'start' => '12:00', 'end' => '12:45', 'capacity' => 2],
-            ['modality' => 'radiology_mri', 'start' => '10:00', 'end' => '11:00', 'capacity' => 1],
-            ['modality' => 'radiology_mri', 'start' => '14:00', 'end' => '15:00', 'capacity' => 1],
-            ['modality' => 'cardiology', 'start' => '10:00', 'end' => '11:00', 'capacity' => 1],
+            ['modality' => 'pathology', 'start' => '07:30', 'end' => '08:00', 'capacity' => 3, 'booked' => 0],
+            ['modality' => 'pathology', 'start' => '08:30', 'end' => '09:00', 'capacity' => 3, 'booked' => 0],
+            ['modality' => 'pathology', 'start' => '09:30', 'end' => '10:00', 'capacity' => 3, 'booked' => 0],
+            ['modality' => 'pathology', 'start' => '10:30', 'end' => '11:00', 'capacity' => 2, 'booked' => 0],
+            ['modality' => 'pathology', 'start' => '13:30', 'end' => '14:00', 'capacity' => 3, 'booked' => 0],
+            ['modality' => 'pathology', 'start' => '15:00', 'end' => '15:30', 'capacity' => 3, 'booked' => 0],
+            ['modality' => 'ultrasound', 'start' => '08:30', 'end' => '09:15', 'capacity' => 1, 'booked' => 1],
+            ['modality' => 'ultrasound', 'start' => '10:00', 'end' => '10:45', 'capacity' => 2, 'booked' => 0],
+            ['modality' => 'ultrasound', 'start' => '12:00', 'end' => '12:45', 'capacity' => 2, 'booked' => 0],
+            ['modality' => 'ultrasound', 'start' => '14:30', 'end' => '15:15', 'capacity' => 2, 'booked' => 0],
+            ['modality' => 'radiology_mri', 'start' => '09:00', 'end' => '10:00', 'capacity' => 1, 'booked' => 0],
+            ['modality' => 'radiology_mri', 'start' => '11:30', 'end' => '12:30', 'capacity' => 1, 'booked' => 0],
+            ['modality' => 'radiology_mri', 'start' => '14:00', 'end' => '15:00', 'capacity' => 1, 'booked' => 0],
+            ['modality' => 'radiology_mri', 'start' => '16:00', 'end' => '17:00', 'capacity' => 1, 'booked' => 0],
+            ['modality' => 'cardiology', 'start' => '09:30', 'end' => '10:30', 'capacity' => 1, 'booked' => 0],
+            ['modality' => 'cardiology', 'start' => '12:00', 'end' => '13:00', 'capacity' => 1, 'booked' => 0],
+            ['modality' => 'cardiology', 'start' => '15:00', 'end' => '16:00', 'capacity' => 1, 'booked' => 0],
         ];
 
         foreach ($templates as $tpl) {
@@ -810,7 +827,7 @@ class McpServerController extends Controller
                     'end_time' => $tpl['end'],
                     'modality' => $tpl['modality'],
                     'capacity' => $tpl['capacity'],
-                    'booked_count' => 0,
+                    'booked_count' => $tpl['booked'],
                 ]
             );
         }

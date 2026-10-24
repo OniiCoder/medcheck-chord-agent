@@ -185,8 +185,8 @@
             <!-- Tomorrow's Clinic Slot Inventory -->
             <section class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg">
                 <div class="px-6 py-4 border-b border-slate-800">
-                    <h2 class="text-base font-semibold text-white">Clinic Slot Inventory (2026-10-20)</h2>
-                    <p class="text-xs text-slate-400">Notice how <code class="text-amber-300">SLOT-20261020-0830-ULTR</code> is pre-seeded as FULL to test conflict handling</p>
+                    <h2 class="text-base font-semibold text-white">Clinic Slot Inventory (Tomorrow: {{ $tomorrowDate }})</h2>
+                    <p class="text-xs text-slate-400">Notice how <code class="text-amber-300">SLOT-{{ str_replace('-', '', $tomorrowDate) }}-0830-ULTR</code> is pre-seeded as FULL to test conflict handling</p>
                 </div>
                 <div class="overflow-y-auto max-h-[520px]">
                     <table class="w-full text-left text-xs">

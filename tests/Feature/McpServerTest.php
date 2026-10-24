@@ -60,6 +60,9 @@ class McpServerTest extends TestCase
 
     public function test_check_clinic_slots_enforces_morning_only_for_fasting_lipid_profile(): void
     {
+        $tomorrowCompact = str_replace('-', '', \Carbon\Carbon::tomorrow('Africa/Lagos')->format('Y-m-d'));
+
+        // Omit preferred_date to verify it defaults dynamically to tomorrow
         $response = $this->postJson('/mcp', [
             'jsonrpc' => '2.0',
             'id' => 10,
@@ -68,7 +71,6 @@ class McpServerTest extends TestCase
                 'name' => 'check_clinic_slots',
                 'arguments' => [
                     'test_code' => 'LIPID-FAST',
-                    'preferred_date' => '2026-10-20',
                 ],
             ],
         ]);
@@ -78,16 +80,19 @@ class McpServerTest extends TestCase
 
         $payload = json_decode($response->json('result.content.0.text'), true);
         $this->assertEquals('ok', $payload['status']);
+        $this->assertEquals(\Carbon\Carbon::tomorrow('Africa/Lagos')->format('Y-m-d'), $payload['date']);
         $this->assertEquals(28500, $payload['test']['price_ngn']);
         $this->assertTrue($payload['test']['requires_fasting']);
 
-        $afternoonSlot = collect($payload['slots'])->firstWhere('slot_code', 'SLOT-20261020-1330-PATH');
+        $afternoonSlot = collect($payload['slots'])->firstWhere('slot_code', "SLOT-{$tomorrowCompact}-1330-PATH");
         $this->assertFalse($afternoonSlot['bookable']);
         $this->assertEquals('RESTRICTED_MORNING_ONLY_TEST', $afternoonSlot['status']);
     }
 
     public function test_booking_requires_prep_acknowledgement_and_rejects_full_slots(): void
     {
+        $tomorrowCompact = str_replace('-', '', \Carbon\Carbon::tomorrow('Africa/Lagos')->format('Y-m-d'));
+
         // 1. Rejects when prep_acknowledged is false
         $unconfirmed = $this->postJson('/mcp', [
             'jsonrpc' => '2.0',
@@ -97,7 +102,7 @@ class McpServerTest extends TestCase
                 'name' => 'book_and_initialize_payment',
                 'arguments' => [
                     'test_code' => 'US-PELVIC',
-                    'slot_code' => 'SLOT-20261020-1000-ULTR',
+                    'slot_code' => "SLOT-{$tomorrowCompact}-1000-ULTR",
                     'patient_name' => 'Ngozi Eze',
                     'patient_phone' => '+2348022223333',
                     'patient_email' => 'ngozi@example.com',
@@ -119,7 +124,7 @@ class McpServerTest extends TestCase
                 'name' => 'book_and_initialize_payment',
                 'arguments' => [
                     'test_code' => 'US-PELVIC',
-                    'slot_code' => 'SLOT-20261020-0830-ULTR',
+                    'slot_code' => "SLOT-{$tomorrowCompact}-0830-ULTR",
                     'patient_name' => 'Ngozi Eze',
                     'patient_phone' => '+2348022223333',
                     'patient_email' => 'ngozi@example.com',
@@ -136,6 +141,8 @@ class McpServerTest extends TestCase
 
     public function test_end_to_end_booking_payment_verification_and_failed_payment_handling(): void
     {
+        $tomorrowCompact = str_replace('-', '', \Carbon\Carbon::tomorrow('Africa/Lagos')->format('Y-m-d'));
+
         // 1. Book an open morning slot for LIPID-FAST
         $bookResp = $this->postJson('/mcp', [
             'jsonrpc' => '2.0',
@@ -145,7 +152,7 @@ class McpServerTest extends TestCase
                 'name' => 'book_and_initialize_payment',
                 'arguments' => [
                     'test_code' => 'LIPID-FAST',
-                    'slot_code' => 'SLOT-20261020-0830-PATH',
+                    'slot_code' => "SLOT-{$tomorrowCompact}-0830-PATH",
                     'patient_name' => 'Tunde Bakare',
                     'patient_phone' => '+2348055556666',
                     'patient_email' => 'tunde.bakare@example.com',

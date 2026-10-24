@@ -22,7 +22,8 @@ class DashboardController extends Controller
 
         $auditLogs = McpAuditLog::latest()->take(25)->get();
         $tests = DiagnosticTest::orderBy('category')->get();
-        $slotsTomorrow = ClinicSlot::where('slot_date', '2026-10-20')
+        $tomorrowDate = Carbon::tomorrow('Africa/Lagos')->format('Y-m-d');
+        $slotsTomorrow = ClinicSlot::where('slot_date', $tomorrowDate)
             ->orderBy('modality')
             ->orderBy('start_time')
             ->get();
@@ -32,6 +33,7 @@ class DashboardController extends Controller
             'auditLogs' => $auditLogs,
             'tests' => $tests,
             'slotsTomorrow' => $slotsTomorrow,
+            'tomorrowDate' => $tomorrowDate,
             'hasLivePaystackKey' => ! empty(config('services.paystack.secret_key')),
         ]);
     }

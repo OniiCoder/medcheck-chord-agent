@@ -138,4 +138,31 @@ Below are the specific technical issues, subtle API contract edge cases, and doc
   2. **Translate `VALIDATION_ERROR` field names to `snake_case`:** In the `MethodArgumentNotValidException` handler, map Java property paths through Jackson's `PropertyNamingStrategies.SNAKE_CASE` before populating `error.details` so `"idempotencyKey"` is reported as `"idempotency_key"`.
   3. **Map `HttpRequestMethodNotSupportedException` to `405`:** Add a handler in `@ControllerAdvice` so calling `POST` on a `PUT`-only route (`/v1/teammates/{id}/tools`) returns `405 METHOD_NOT_ALLOWED` rather than `500 INTERNAL_ERROR`.
 
+---
+
+### Field Note 7: Account Signup 6-Digit Verification OTP Routed to Spam
+
+* **What happened:**
+  - During Chord account signup (`chordhq.xyz/login`), the 6-digit email verification code did not arrive in the primary inbox and was routed directly to the Spam folder.
+* **How I worked out the cause:**
+  - After waiting for the OTP email in the main inbox, I checked the Spam folder and found the verification email flagged by the mail provider's spam filter (typically caused by a new sending domain/subdomain or missing/unwarmed SPF, DKIM, and DMARC alignment on transactional auth emails).
+* **How I fixed it / worked around it:**
+  - Retrieved the 6-digit code from the Spam folder and marked the sender as "Not Spam" so subsequent Chord notifications land in the inbox.
+* **What I'd change in Chord next week:**
+  - Audit SPF/DKIM/DMARC records and dedicated transactional IP reputation for the OTP sender domain, and add a short hint on the OTP verification screen (*"Didn't get the code? Check your Spam/Promotions folder"*).
+
+---
+
+### Field Note 8: No Connected Tool Count or Status Indicator Under `Connections > Channels & Tools` on the Admin Page
+
+* **What happened:**
+  - After registering and connecting our custom MCP tool server, the Admin page (`Connections > Channels & Tools`) showed no visual badge, count, or status indicator confirming that a custom tool was configured and active.
+* **How I worked out the cause:**
+  - Clicked back into the MCP / Tools configuration modal and tested the teammate in the simulator to verify the tool was actually bound, confirming that the parent `Connections > Channels & Tools` list item simply doesn't render summary state for connected custom MCP servers.
+* **How I fixed it / worked around it:**
+  - Verified active tool registration by opening the tool configuration sub-view directly and monitoring inbound `tools/list` and `tools/call` requests on our Laravel Forge Operations Console.
+* **What I'd change in Chord next week:**
+  - Display a status pill or counter on the `Connections > Channels & Tools` row (e.g., `1 MCP Server Connected · 4 Tools Active` with a green health dot) so builders can see at a glance from the Admin page that their custom tools are wired up.
+
+
 
